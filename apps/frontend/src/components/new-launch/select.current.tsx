@@ -16,7 +16,7 @@ import {
   useModals,
 } from '@gitroom/frontend/components/layout/new-modal';
 
-export function useHasScroll(ref: RefObject<HTMLElement>): boolean {
+export function useHasScroll(ref: RefObject<HTMLElement | null>): boolean {
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
 
   useEffect(() => {

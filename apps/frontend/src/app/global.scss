@@ -1,6 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 @import './colors.scss';
 @import './polonto.css';
 @import '@uppy/core/dist/style.css';

@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { Button } from '@gitroom/react/form/button';
-import { FC, useCallback, useEffect, useState } from 'react';
+import { FC, Fragment, useCallback, useEffect, useState } from 'react';
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import { deleteDialog } from '@gitroom/react/helpers/delete.dialog';
 import { Input } from '@gitroom/react/form/input';
@@ -180,7 +180,7 @@ export const GithubComponent: FC<{
   return (
     <>
       {githubState.map((g) => (
-        <>
+        <Fragment key={g.id}>
           {!g.login ? (
             <ConnectComponent
               deleteRepository={deleteConnect(g)}
@@ -191,7 +191,7 @@ export const GithubComponent: FC<{
           ) : (
             <ConnectedComponent deleteRepository={deleteConnect(g)} {...g} />
           )}
-        </>
+        </Fragment>
       ))}
       {githubState.filter((f) => !f.login).length === 0 && (
         <div className="my-[16px] mt-[16px] h-[90px] bg-sixth border-fifth border rounded-[4px] p-[24px]">

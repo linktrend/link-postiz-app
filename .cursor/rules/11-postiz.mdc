@@ -1,0 +1,10 @@
+---
+description: "Postiz application"
+globs: "**/*"
+alwaysApply: false
+---
+
+# Conventions
+
+- OAuth and API tokens for social providers belong in GSM-backed env at runtime only.
+- Keep LiNKtrend branding or multi-tenant hooks in isolated modules when possible.

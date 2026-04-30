@@ -804,7 +804,7 @@ export class InstagramProvider
     date: number,
     type = 'graph.facebook.com'
   ): Promise<AnalyticsData[]> {
-    const until = dayjs().endOf('day').unix();
+    const until = dayjs().startOf('day').unix();
     const since = dayjs().subtract(date, 'day').unix();
 
     const { data, ...all } = await (

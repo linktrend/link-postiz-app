@@ -1,60 +1,34 @@
 name: Fork Upstream Sync
-
 on:
-  schedule:
-    - cron: "17 19 * * *"
-  workflow_dispatch:
-
+  workflow_dispatch: null
 permissions:
   contents: write
-
 jobs:
   sync-upstream-to-development:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout fork development
-        uses: actions/checkout@v4
-        with:
-          ref: development
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Sync upstream into fork development only
-        env:
-          UPSTREAM_URL: "https://github.com/gitroomhq/postiz-app.git"
-        run: |
-          set -euo pipefail
-
-          if [ "${GITHUB_REPOSITORY_OWNER}" != "linktrend" ]; then
-            echo "This workflow only runs in linktrend-owned forks."
-            exit 1
-          fi
-
-          git config user.name "linktrend-upstream-sync"
-          git config user.email "actions@users.noreply.github.com"
-
-          git remote remove upstream 2>/dev/null || true
-          git remote add upstream "${UPSTREAM_URL}"
-
-          upstream_head="$(git ls-remote --symref upstream HEAD | awk "/^ref:/ { sub(\"refs/heads/\", \"\", \$2); print \$2; exit }")"
-          if [ -z "${upstream_head}" ]; then
-            echo "Could not resolve upstream default branch."
-            exit 1
-          fi
-
-          echo "Syncing upstream/${upstream_head} into fork development."
-          git fetch upstream "${upstream_head}"
-          git fetch origin development
-          git checkout development
-          git reset --hard origin/development
-
-          if git merge --no-edit --no-ff "upstream/${upstream_head}"; then
-            if git diff --quiet origin/development..HEAD; then
-              echo "development already contains upstream/${upstream_head}."
-            else
-              git push origin HEAD:development
-            fi
-          else
-            echo "Upstream sync conflict. Resolve manually in the fork; do not open PRs to upstream."
-            exit 1
-          fi
+    - name: Checkout fork development
+      uses: actions/checkout@v4
+      with:
+        ref: development
+        fetch-depth: 0
+        persist-credentials: true
+    - name: Sync upstream into fork development only
+      env:
+        UPSTREAM_URL: https://github.com/gitroomhq/postiz-app.git
+      run: "set -euo pipefail\n\nif [ \"${GITHUB_REPOSITORY_OWNER}\" != \"linktrend\"\
+        \ ]; then\n  echo \"This workflow only runs in linktrend-owned forks.\"\n\
+        \  exit 1\nfi\n\ngit config user.name \"linktrend-upstream-sync\"\ngit config\
+        \ user.email \"actions@users.noreply.github.com\"\n\ngit remote remove upstream\
+        \ 2>/dev/null || true\ngit remote add upstream \"${UPSTREAM_URL}\"\n\nupstream_head=\"\
+        $(git ls-remote --symref upstream HEAD | awk \"/^ref:/ { sub(\\\"refs/heads/\\\
+        \", \\\"\\\", \\$2); print \\$2; exit }\")\"\nif [ -z \"${upstream_head}\"\
+        \ ]; then\n  echo \"Could not resolve upstream default branch.\"\n  exit 1\n\
+        fi\n\necho \"Syncing upstream/${upstream_head} into fork development.\"\n\
+        git fetch upstream \"${upstream_head}\"\ngit fetch origin development\ngit\
+        \ checkout development\ngit reset --hard origin/development\n\nif git merge\
+        \ --no-edit --no-ff \"upstream/${upstream_head}\"; then\n  if git diff --quiet\
+        \ origin/development..HEAD; then\n    echo \"development already contains\
+        \ upstream/${upstream_head}.\"\n  else\n    git push origin HEAD:development\n\
+        \  fi\nelse\n  echo \"Upstream sync conflict. Resolve manually in the fork;\
+        \ do not open PRs to upstream.\"\n  exit 1\nfi\n"

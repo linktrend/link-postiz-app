@@ -205,7 +205,14 @@ export const FirstBillingComponent = () => {
           <div className="block tablet:hidden">
             <JoinOver />
           </div>
-          {!isLoading && data && stripe ? (
+          {data?.blocked ? (
+            <div className="mt-[24px] p-[24px] rounded-[20px] border-[1.5px] border-newColColor text-[16px] font-[500]">
+              {t(
+                'billing_other_account_subscribed',
+                'Another account with this email already has an active subscription. Please log off and sign in to that account to manage your subscription.'
+              )}
+            </div>
+          ) : !isLoading && data && stripe ? (
             <EmbeddedBilling
               stripe={stripe}
               secret={data.client_secret}
@@ -365,6 +372,13 @@ export const BillingFeatures: FC<{ tier: string }> = ({ tier }) => {
         key: 'billing_ai_videos_per_month',
         defaultValue: 'AI Videos per month',
         prefix: currentPricing?.generate_videos,
+      });
+    }
+    if (currentPricing?.clipping_minutes) {
+      list.push({
+        key: 'billing_clipping_minutes_per_month',
+        defaultValue: 'minutes of AI video clipping per month',
+        prefix: currentPricing?.clipping_minutes,
       });
     }
     return list;

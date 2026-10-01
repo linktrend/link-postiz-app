@@ -48,16 +48,6 @@ export const withProvider = function <T extends object>(params: {
     maximumCharacters?: number;
   }>;
   dto?: any;
-  checkValidity?: (
-    value: Array<
-      Array<{
-        path: string;
-        thumbnail?: string;
-      }>
-    >,
-    settings: T,
-    additionalSettings: any
-  ) => Promise<string | true>;
   maximumCharacters?: number | ((settings: any) => number);
 }) {
   const {
@@ -65,7 +55,6 @@ export const withProvider = function <T extends object>(params: {
     SettingsComponent,
     CustomPreviewComponent,
     dto,
-    checkValidity,
     maximumCharacters,
   } = params;
 
@@ -189,6 +178,60 @@ export const withProvider = function <T extends object>(params: {
       reValidateMode: 'onChange',
     });
 
+    const validateTikTokRequirements = async () => {
+      const schemaValid = await form.trigger();
+      if (selectedIntegration.integration.identifier !== 'tiktok') {
+        return schemaValid;
+      }
+
+      const settings = form.getValues();
+      const consentMissing = settings.tiktokConsent !== true;
+      const creatorInfoMissing =
+        settings.content_posting_method !== 'UPLOAD' &&
+        settings.tiktokDirectPostReady !== true;
+      const disclosureMissing =
+        settings.content_posting_method !== 'UPLOAD' &&
+        settings.disclose === true &&
+        settings.brand_organic_toggle !== true &&
+        settings.brand_content_toggle !== true;
+
+      if (consentMissing) {
+        form.setError('tiktokConsent', {
+          type: 'required',
+          message: 'Consent is required before sending content to TikTok.',
+        });
+      } else {
+        form.clearErrors('tiktokConsent');
+      }
+
+      if (creatorInfoMissing) {
+        form.setError('tiktokDirectPostReady', {
+          type: 'required',
+          message:
+            'TikTok settings and media checks must pass before direct posting.',
+        });
+      } else {
+        form.clearErrors('tiktokDirectPostReady');
+      }
+
+      if (disclosureMissing) {
+        form.setError('brand_organic_toggle', {
+          type: 'required',
+          message:
+            'Choose Your brand, Branded content, or both when content disclosure is on.',
+        });
+      } else {
+        form.clearErrors('brand_organic_toggle');
+      }
+
+      return (
+        schemaValid &&
+        !consentMissing &&
+        !creatorInfoMissing &&
+        !disclosureMissing
+      );
+    };
+
     useImperativeHandle(
       ref,
       () => ({
@@ -198,17 +241,8 @@ export const withProvider = function <T extends object>(params: {
             id: props.id,
             identifier: selectedIntegration.integration.identifier,
             integration: selectedIntegration.integration,
-            valid: await form.trigger(),
+            valid: await validateTikTokRequirements(),
             err: form.formState.errors,
-            errors: checkValidity
-              ? await checkValidity(
-                  value.map((p) => p.media || []),
-                  settings,
-                  JSON.parse(
-                    selectedIntegration.integration.additionalSettings || '[]'
-                  )
-                )
-              : true,
             settings,
             values: value,
             maximumCharacters:
@@ -238,7 +272,7 @@ export const withProvider = function <T extends object>(params: {
           };
         },
         trigger: () => {
-          return form.trigger();
+          return validateTikTokRequirements();
         },
       }),
       [value]
@@ -308,7 +342,14 @@ export const withProvider = function <T extends object>(params: {
               ))}
             {(SettingsComponent || !!data?.internalPlugs?.length) &&
               createPortal(
-                <div data-id={props.id} className={isGlobal ? 'bg-newSettings pb-[12px] px-[12px]' : 'hidden bg-newSettings px-[12px] pb-[12px]'}>
+                <div
+                  data-id={props.id}
+                  className={
+                    isGlobal
+                      ? 'bg-newSettings pb-[12px] px-[12px]'
+                      : 'hidden bg-newSettings px-[12px] pb-[12px]'
+                  }
+                >
                   {isGlobal && (
                     <style>{`#wrapper-settings {display: flex !important} #social-empty {display: block !important;}`}</style>
                   )}
@@ -330,7 +371,9 @@ export const withProvider = function <T extends object>(params: {
                           src={`/icons/platforms/${selectedIntegration?.integration.identifier}.png`}
                         />
                       </div>
-                      <div className="text-[20px]">{selectedIntegration?.integration.name}</div>
+                      <div className="text-[20px]">
+                        {selectedIntegration?.integration.name}
+                      </div>
                     </div>
                   )}
                   <SettingsComponent />
@@ -363,7 +406,6 @@ export const withProvider = function <T extends object>(params: {
     dto,
     postComment,
     maximumCharacters,
-    checkValidity,
   };
 
   return Wrapped;
@@ -378,11 +420,6 @@ export const getProviderSettingsMeta = (component: unknown) => {
         dto?: any;
         postComment: PostComment;
         maximumCharacters?: number | ((settings: any) => number);
-        checkValidity?: (
-          value: Array<Array<{ path: string; thumbnail?: string }>>,
-          settings: any,
-          additionalSettings: any
-        ) => Promise<string | true>;
       }
     | undefined;
 };

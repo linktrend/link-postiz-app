@@ -4,6 +4,7 @@ import { useFormContext } from 'react-hook-form';
 import { useVideo } from '@gitroom/frontend/components/videos/video.context.wrapper';
 import { Textarea } from '@gitroom/react/form/textarea';
 import { MultiMediaComponent } from '@gitroom/frontend/components/media/media.component';
+import { hasExtension } from '@gitroom/helpers/utils/has.extension';
 
 export interface Voice {
   id: string;
@@ -11,7 +12,7 @@ export interface Voice {
   preview_url: string;
 }
 
-const VEO3Settings: FC = () => {
+const SeedanceSettings: FC = () => {
   const { register, watch, setValue, formState } = useFormContext();
   const { value } = useVideo();
 
@@ -46,7 +47,7 @@ const VEO3Settings: FC = () => {
           setValue(
             'images',
             val.target.value
-              .filter((f) => f.path.indexOf('mp4') === -1)
+              .filter((f) => !hasExtension(f.path, 'mp4'))
               .slice(0, 3)
           )
         }
@@ -56,8 +57,8 @@ const VEO3Settings: FC = () => {
   );
 };
 
-const VeoComponent = () => {
-  return <VEO3Settings />;
+const SeedanceComponent = () => {
+  return <SeedanceSettings />;
 };
 
-videoWrapper('veo3', VeoComponent);
+videoWrapper('seedance', SeedanceComponent);

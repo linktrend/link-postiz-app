@@ -367,10 +367,18 @@ export class PostsService {
               const fresh = await this._mediaService.getMediaById(p.id);
               if (fresh?.status === 'ready' && fresh.path !== p.path) {
                 imageUpdateNeeded = true;
-                return { ...p, name: fresh.name, path: fresh.path };
+                return {
+                  ...p,
+                  name: fresh.name,
+                  path: fresh.path,
+                  duration: fresh.duration ?? undefined,
+                };
               }
 
-              return p;
+              return {
+                ...p,
+                duration: fresh?.duration ?? undefined,
+              };
             })
           )
         )

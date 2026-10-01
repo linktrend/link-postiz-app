@@ -160,7 +160,17 @@ export class MediaService {
       response.body,
       declaredSize
     );
-    return this.saveFile(org, uploaded.originalname, uploaded.path);
+    const media = await this.saveFile(
+      org,
+      uploaded.originalname,
+      uploaded.path
+    );
+    return this.measureAndStoreVideoDuration(
+      org,
+      media,
+      uploaded.originalname,
+      uploaded.path
+    );
   }
 
   saveFile(
@@ -192,7 +202,11 @@ export class MediaService {
       !PROCESSABLE[extname(fileName).toLowerCase()] ||
       !client
     ) {
-      return media;
+      // Local storage does not use the optional normalizer, and Cloudflare
+      // uploads can also be released directly when no Temporal client exists.
+      // Measure MP4 duration from a stream so provider checks never buffer the
+      // upload into application memory.
+      return this.measureAndStoreVideoDuration(org, media, fileName, filePath);
     }
 
     await this._mediaRepository.startProcessing(org, media.id);
@@ -214,6 +228,31 @@ export class MediaService {
     }
 
     return { ...media, status: 'processing' };
+  }
+
+  private async measureAndStoreVideoDuration(
+    org: string,
+    media: { id: string },
+    fileName: string,
+    filePath: string
+  ) {
+    if (extname(fileName).toLowerCase() !== '.mp4') {
+      return media;
+    }
+
+    try {
+      const duration = await this.storage.getVideoDuration?.(filePath);
+      if (duration) {
+        await this._mediaRepository.finishProcessing(org, media.id, {
+          duration,
+        });
+        return { ...media, duration };
+      }
+    } catch (err) {
+      console.warn(`Could not measure video duration for ${media.id}:`, err);
+    }
+
+    return media;
   }
 
   // Lets go of a media the normalizer will not touch. A source the platforms
@@ -420,7 +459,11 @@ export class MediaService {
     }
 
     if (result.status === 'unchanged') {
-      await this._mediaRepository.finishProcessing(org, mediaId, {});
+      await this._mediaRepository.finishProcessing(org, mediaId, {
+        ...(typeof result.output?.duration_seconds === 'number'
+          ? { duration: Math.ceil(result.output.duration_seconds) }
+          : {}),
+      });
       return true;
     }
 
@@ -429,6 +472,9 @@ export class MediaService {
       name: outputName,
       path: media.path.slice(0, media.path.lastIndexOf('/') + 1) + outputName,
       fileSize: result.output?.bytes,
+      ...(typeof result.output?.duration_seconds === 'number'
+        ? { duration: Math.ceil(result.output.duration_seconds) }
+        : {}),
     });
 
     // a same-key output already replaced the original; a stray object after a

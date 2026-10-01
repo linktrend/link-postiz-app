@@ -17,6 +17,7 @@ import axios from 'axios';
 import { isSafePublicHttpsUrl } from '@gitroom/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 import { ssrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { parseDataUrl } from '@gitroom/nestjs-libraries/upload/data.url';
+import { getVideoDuration } from './video.duration';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fileTypeFromBuffer } = require('file-type');
 
@@ -198,6 +199,28 @@ class CloudflareStorage implements IUploadProvider {
       console.error('Error streaming file to Cloudflare R2:', err);
       throw err;
     }
+  }
+
+  async getVideoDuration(filePath: string) {
+    const publicPrefix = `${this._uploadUrl}/`;
+    const key = filePath.startsWith(publicPrefix)
+      ? filePath.slice(publicPrefix.length)
+      : filePath;
+    // This provider currently creates flat, random object keys. Restrict the
+    // metadata read to that shape instead of treating an arbitrary media path
+    // as an R2 object key.
+    if (!/^[A-Za-z0-9_-]+\.mp4$/i.test(key)) {
+      return null;
+    }
+
+    const { Body } = await this._client.send(
+      new GetObjectCommand({ Bucket: this._bucketName, Key: key })
+    );
+    if (!(Body instanceof Readable)) {
+      return null;
+    }
+
+    return getVideoDuration(Body);
   }
 
   async signDownloadUrl(fileName: string) {

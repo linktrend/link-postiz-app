@@ -175,5 +175,5 @@ export async function proxy(request: NextRequest) {
 
 // See "Matching Paths" below to learn more
 export const config = {
-  matcher: '/((?!api/|_next/|_static/|_vercel|[\\w-]+\\.\\w+).*)',
+  matcher: '/((?!api/|tiktok-media/|_next/|_static/|_vercel|[\\w-]+\\.\\w+).*)',
 };

@@ -41,7 +41,13 @@ export class MediaRepository {
   finishProcessing(
     org: string,
     id: string,
-    data: { name?: string; path?: string; fileSize?: number; error?: string }
+    data: {
+      name?: string;
+      path?: string;
+      fileSize?: number;
+      duration?: number;
+      error?: string;
+    }
   ) {
     return this._media.model.media.update({
       where: { id, organizationId: org },
@@ -49,6 +55,7 @@ export class MediaRepository {
         ...(data.name ? { name: data.name } : {}),
         ...(data.path ? { path: data.path } : {}),
         ...(data.fileSize ? { fileSize: data.fileSize } : {}),
+        ...(data.duration !== undefined ? { duration: data.duration } : {}),
         status: data.error ? 'failed' : 'ready',
         processingError: data.error || null,
       },
@@ -68,6 +75,7 @@ export class MediaRepository {
         name: true,
         originalName: true,
         path: true,
+        duration: true,
         thumbnail: true,
         alt: true,
         status: true,

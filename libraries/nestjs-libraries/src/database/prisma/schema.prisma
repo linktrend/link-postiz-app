@@ -221,6 +221,7 @@ model Media {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
   fileSize           Int                 @default(0)
+  duration           Int?
   type               String              @default("image")
   thumbnail          String?
   alt                String?

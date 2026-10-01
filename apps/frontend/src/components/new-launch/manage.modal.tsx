@@ -273,6 +273,33 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
       const integrationById = (id: string) =>
         selectedIntegrations.find((p) => p.integration.id === id);
 
+      if (type !== 'draft') {
+        const invalidTikTok = allValues.find(
+          (post: any) =>
+            post.identifier === 'tiktok' &&
+            (post.settings?.tiktokConsent !== true ||
+              (post.settings?.content_posting_method !== 'UPLOAD' &&
+                (post.settings?.tiktokDirectPostReady !== true ||
+                  (post.settings?.disclose === true &&
+                    post.settings?.brand_organic_toggle !== true &&
+                    post.settings?.brand_content_toggle !== true))))
+        );
+        if (invalidTikTok) {
+          toaster.show(
+            invalidTikTok.settings?.disclose === true &&
+              invalidTikTok.settings?.brand_organic_toggle !== true &&
+              invalidTikTok.settings?.brand_content_toggle !== true
+              ? 'TikTok: choose Your brand, Branded content, or both before scheduling.'
+              : 'TikTok: confirm consent and load the current account settings before scheduling.',
+            'warning'
+          );
+          integrationById(invalidTikTok.id)?.ref?.current?.fix?.();
+          setLoading(false);
+          setShowSettings(true);
+          return;
+        }
+      }
+
       const group = existingData.group || makeId(10);
 
       const posts = allValues.map((post: any) => ({

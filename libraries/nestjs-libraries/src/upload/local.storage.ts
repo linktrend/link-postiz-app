@@ -1,10 +1,19 @@
 import { IUploadProvider, UploadedStream } from './upload.interface';
-import { createWriteStream, mkdirSync, unlink, writeFileSync } from 'fs';
+import {
+  createReadStream,
+  createWriteStream,
+  mkdirSync,
+  unlink,
+  writeFileSync,
+} from 'fs';
+import { stat } from 'fs/promises';
+import { relative, resolve, sep } from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { isSafePublicHttpsUrl } from '@gitroom/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 import { ssrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { parseDataUrl } from '@gitroom/nestjs-libraries/upload/data.url';
+import { getVideoDuration } from './video.duration';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fileTypeFromBuffer } = require('file-type');
 
@@ -24,6 +33,28 @@ const LOCAL_STORAGE_ALLOWED_MIME = new Set<string>([
 ]);
 export class LocalStorage implements IUploadProvider {
   constructor(private uploadDirectory: string) {}
+
+  async getVideoDuration(filePath: string) {
+    const publicPrefix = `${process.env.FRONTEND_URL}/uploads/`;
+    if (!filePath.startsWith(publicPrefix)) {
+      return null;
+    }
+
+    const root = resolve(this.uploadDirectory);
+    const localPath = resolve(root, filePath.slice(publicPrefix.length));
+    const fromRoot = relative(root, localPath);
+    if (
+      !fromRoot ||
+      fromRoot === '..' ||
+      fromRoot.startsWith(`..${sep}`) ||
+      fromRoot.startsWith(sep)
+    ) {
+      return null;
+    }
+
+    await stat(localPath);
+    return getVideoDuration(createReadStream(localPath));
+  }
 
   // Files live under /YYYY/MM/DD with a random name; creates the folder
   private newFilePath(ext: string) {

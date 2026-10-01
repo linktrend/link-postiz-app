@@ -112,6 +112,8 @@ export type PostResponse = {
   releaseURL: string; // The URL of the post on the platform
   status: string; // Status of the operation or initial post status, 'pending' means the workflow must poll checkPostStatus
   pendingData?: any; // Opaque provider state used by checkPostStatus / finalizePost, never inspected by generic code
+  /** Indicates that TikTok uploaded the content to the creator's inbox for manual completion. */
+  deliveryStatus?: 'published' | 'inbox';
 };
 
 // Returned by checkPostStatus / finalizePost:
@@ -128,7 +130,12 @@ export type PostResponse = {
 export type PendingCheckResponse =
   | { status: 'pending'; pendingData: any }
   | { status: 'ready'; pendingData: any }
-  | { status: 'completed'; postId: string; releaseURL: string };
+  | {
+      status: 'completed';
+      postId: string;
+      releaseURL: string;
+      deliveryStatus?: 'published' | 'inbox';
+    };
 
 export type PostDetails<T = any> = {
   id: string;
@@ -146,6 +153,8 @@ export type PollDetails = {
 export type MediaContent = {
   type: 'image' | 'video'; // Type of the media content
   path: string;
+  /** Optional server-measured duration in seconds for video media. */
+  duration?: number;
   alt?: string;
   thumbnail?: string;
   thumbnailTimestamp?: number;

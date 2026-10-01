@@ -365,6 +365,7 @@ export async function postWorkflowV112({
             postId: result.postId,
             releaseURL: result.releaseURL,
             status: 'success',
+            deliveryStatus: result.deliveryStatus || 'published',
           };
         }
 
@@ -499,15 +500,19 @@ export async function postWorkflowV112({
         updated = true;
 
         if (i === 0) {
-          // send notification on a sucessful post
+          const sentToTikTokInbox = postsResults[i].deliveryStatus === 'inbox';
           await inAppNotification(
             post.integration.organizationId,
-            `Your post has been published on ${capitalize(
-              post.integration.providerIdentifier
-            )}`,
-            `Your post has been published on ${capitalize(
-              post.integration.providerIdentifier
-            )} at ${postsResults[0].releaseURL}`,
+            sentToTikTokInbox
+              ? 'Your video was uploaded to your TikTok inbox'
+              : `Your post has been published on ${capitalize(
+                  post.integration.providerIdentifier
+                )}`,
+            sentToTikTokInbox
+              ? 'Open TikTok to review and publish the video from your inbox.'
+              : `Your post has been published on ${capitalize(
+                  post.integration.providerIdentifier
+                )} at ${postsResults[0].releaseURL}`,
             true,
             true
           );

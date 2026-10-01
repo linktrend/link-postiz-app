@@ -22,6 +22,20 @@ import { createReadStream } from 'fs';
 import { getSsrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { Integration } from '@prisma/client';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import {
+  isTikTokVerifiedMediaUrl,
+  signLocalTikTokMediaUrl,
+} from '@gitroom/nestjs-libraries/upload/tiktok.signed-media';
+
+export type TikTokCreatorInfo = {
+  creatorNickname: string;
+  creatorAvatarUrl: string;
+  privacyLevelOptions: string[];
+  commentDisabled: boolean;
+  duetDisabled: boolean;
+  stitchDisabled: boolean;
+  maxVideoPostDurationSec: number;
+};
 
 @Rules(
   [
@@ -188,7 +202,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       return {
         type: 'bad-body' as const,
         value:
-          'TikTok says your daily post limit reached, please try again tomorrow',
+          'TikTok’s Direct Post limit for this account has been reached for the last 24 hours. Please publish through the TikTok app or try again after the 24-hour window.',
       };
     }
 
@@ -418,23 +432,60 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   }
 
   async maxVideoLength(accessToken: string) {
-    const {
-      data: { max_video_post_duration_sec },
-    } = await (
-      await fetch(
-        'https://open.tiktokapis.com/v2/post/publish/creator_info/query/',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json; charset=UTF-8',
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      )
-    ).json();
+    const { maxVideoPostDurationSec } = await this.creatorInfo(accessToken);
 
     return {
-      maxDurationSeconds: max_video_post_duration_sec,
+      maxDurationSeconds: maxVideoPostDurationSec,
+    };
+  }
+
+  /** Fetch the current TikTok creator settings required to render and validate Direct Post. */
+  async creatorInfo(accessToken: string): Promise<TikTokCreatorInfo> {
+    const response = await this.fetch(
+      'https://open.tiktokapis.com/v2/post/publish/creator_info/query/',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+    const body = await response.json();
+    const data = body?.data;
+    const options = data?.privacy_level_options;
+    const maxDuration = data?.max_video_post_duration_sec;
+
+    if (
+      body?.error?.code !== 'ok' ||
+      !Array.isArray(options) ||
+      options.length === 0 ||
+      !options.every((option: unknown) => typeof option === 'string') ||
+      typeof data?.comment_disabled !== 'boolean' ||
+      typeof data?.duet_disabled !== 'boolean' ||
+      typeof data?.stitch_disabled !== 'boolean' ||
+      typeof maxDuration !== 'number' ||
+      !Number.isFinite(maxDuration) ||
+      maxDuration < 0
+    ) {
+      throw new BadBody(
+        'tiktok-error-creator-info',
+        JSON.stringify(body),
+        Buffer.from(JSON.stringify(body)),
+        'TikTok did not return valid creator settings. Reconnect your account and try again.'
+      );
+    }
+
+    return {
+      creatorNickname:
+        typeof data.creator_nickname === 'string' ? data.creator_nickname : '',
+      creatorAvatarUrl:
+        typeof data.creator_avatar_url === 'string' ? data.creator_avatar_url : '',
+      privacyLevelOptions: options,
+      commentDisabled: data.comment_disabled,
+      duetDisabled: data.duet_disabled,
+      stitchDisabled: data.stitch_disabled,
+      maxVideoPostDurationSec: maxDuration,
     };
   }
 
@@ -485,6 +536,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
         status: 'completed',
         releaseURL: 'https://www.tiktok.com/messages?lang=en',
         postId: 'missing',
+        deliveryStatus: 'inbox',
       };
     }
 
@@ -499,6 +551,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           : `https://www.tiktok.com/@${integration.profile}/video/${publicPostId}`,
         // TikTok returns the id as a number, releaseId in the db is a string
         postId: !publicPostId ? pendingData.publishId : String(publicPostId),
+        deliveryStatus: 'published',
       };
     }
 
@@ -545,6 +598,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     const method = this.contentPostingMethod(firstPost);
 
     if (method === 'DIRECT_POST') {
+      const disclose = this.assetBoolean(firstPost.settings.disclose);
       return {
         post_info: {
           ...(isPhoto && firstPost.settings.title
@@ -554,8 +608,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
             ? { title: firstPost.message }
             : {}),
           ...(isPhoto ? { description: firstPost.message } : {}),
-          privacy_level:
-            firstPost.settings.privacy_level || 'PUBLIC_TO_EVERYONE',
+          privacy_level: firstPost.settings.privacy_level,
           ...(isPhoto
             ? {}
             : { disable_duet: !this.assetBoolean(firstPost.settings.duet) }),
@@ -572,12 +625,12 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
                   firstPost.settings.video_made_with_ai
                 ),
               }),
-          brand_content_toggle: this.assetBoolean(
-            firstPost.settings.brand_content_toggle
-          ),
-          brand_organic_toggle: this.assetBoolean(
-            firstPost.settings.brand_organic_toggle
-          ),
+          brand_content_toggle:
+            disclose &&
+            this.assetBoolean(firstPost.settings.brand_content_toggle),
+          brand_organic_toggle:
+            disclose &&
+            this.assetBoolean(firstPost.settings.brand_organic_toggle),
           ...(isPhoto
             ? {
                 auto_add_music: firstPost.settings.autoAddMusic === 'yes',
@@ -788,7 +841,9 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
 
   private buildTikokSourceInfoBody(
     firstPost: PostDetails<TikTokDto>,
-    videoSize?: number
+    videoSize?: number,
+    photoUrls?: string[],
+    directVideoUrl?: string
   ) {
     const isPhoto = !hasExtension(firstPost?.media?.[0]?.path, 'mp4');
 
@@ -804,7 +859,22 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
         source_info: {
           source: 'PULL_FROM_URL',
           photo_cover_index: 0,
-          photo_images: firstPost.media?.map((p) => p.path),
+          photo_images: photoUrls || firstPost.media?.map((p) => p.path),
+        },
+      };
+    }
+
+    if (directVideoUrl) {
+      return {
+        source_info: {
+          source: 'PULL_FROM_URL',
+          video_url: directVideoUrl,
+          ...(firstPost?.media?.[0]?.thumbnailTimestamp
+            ? {
+                video_cover_timestamp_ms:
+                  firstPost.media[0].thumbnailTimestamp,
+              }
+            : {}),
         },
       };
     }
@@ -829,12 +899,194 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   ): Promise<PostResponse[]> {
     const [firstPost] = postDetails;
     const isPhoto = !hasExtension(firstPost?.media?.[0]?.path, 'mp4');
+    const method = this.contentPostingMethod(firstPost);
+
+    if (
+      method === 'DIRECT_POST' &&
+      firstPost?.settings?.disclose === true &&
+      firstPost?.settings?.brand_organic_toggle !== true &&
+      firstPost?.settings?.brand_content_toggle !== true
+    ) {
+      const disclosure = {
+        disclose: firstPost?.settings?.disclose,
+        brand_organic_toggle: firstPost?.settings?.brand_organic_toggle,
+        brand_content_toggle: firstPost?.settings?.brand_content_toggle,
+      };
+      throw new BadBody(
+        'tiktok-error-disclosure-selection',
+        JSON.stringify(disclosure),
+        Buffer.from(JSON.stringify(disclosure)),
+        'Choose whether this content promotes Your brand, Branded content, or both before posting to TikTok.'
+      );
+    }
+
+    if (
+      method === 'DIRECT_POST' &&
+      firstPost?.settings?.disclose === true &&
+      firstPost?.settings?.brand_content_toggle === true &&
+      firstPost?.settings?.privacy_level === 'SELF_ONLY'
+    ) {
+      throw new BadBody(
+        'tiktok-error-branded-content-privacy',
+        JSON.stringify({
+          brand_content_toggle: true,
+          privacy_level: firstPost?.settings?.privacy_level,
+        }),
+        Buffer.from(
+          JSON.stringify({
+            brand_content_toggle: true,
+            privacy_level: firstPost?.settings?.privacy_level,
+          })
+        ),
+        'Branded content cannot be posted with TikTok visibility set to “Self only”. Choose a public or friends visibility option.'
+      );
+    }
+
+    if (firstPost?.settings?.tiktokConsent !== true) {
+      throw new BadBody(
+        'tiktok-error-consent',
+        JSON.stringify({ tiktokConsent: firstPost?.settings?.tiktokConsent }),
+        Buffer.from(
+          JSON.stringify({ tiktokConsent: firstPost?.settings?.tiktokConsent })
+        ),
+        'Confirm TikTok’s posting consent before sending content to TikTok.'
+      );
+    }
+
+    if (method === 'DIRECT_POST') {
+      const creatorInfo = await this.creatorInfo(accessToken);
+      const privacyLevel = firstPost?.settings?.privacy_level;
+      const videoDuration = firstPost?.media?.[0]?.duration;
+
+      if (
+        !privacyLevel ||
+        !creatorInfo.privacyLevelOptions.includes(privacyLevel)
+      ) {
+        throw new BadBody(
+          'tiktok-error-privacy-level',
+          JSON.stringify({ privacyLevel }),
+          Buffer.from(JSON.stringify({ privacyLevel })),
+          'Choose a privacy option currently available for this TikTok account before posting.'
+        );
+      }
+
+      if (
+        firstPost.settings.comment &&
+        creatorInfo.commentDisabled
+      ) {
+        throw new BadBody(
+          'tiktok-error-interaction-settings',
+          JSON.stringify({ comment: true }),
+          Buffer.from(JSON.stringify({ comment: true })),
+          'Comments are disabled in this TikTok account’s privacy settings.'
+        );
+      }
+
+      if (!isPhoto && firstPost.settings.duet && creatorInfo.duetDisabled) {
+        throw new BadBody(
+          'tiktok-error-interaction-settings',
+          JSON.stringify({ duet: true }),
+          Buffer.from(JSON.stringify({ duet: true })),
+          'Duet is disabled in this TikTok account’s privacy settings.'
+        );
+      }
+
+      if (!isPhoto && firstPost.settings.stitch && creatorInfo.stitchDisabled) {
+        throw new BadBody(
+          'tiktok-error-interaction-settings',
+          JSON.stringify({ stitch: true }),
+          Buffer.from(JSON.stringify({ stitch: true })),
+          'Stitch is disabled in this TikTok account’s privacy settings.'
+        );
+      }
+
+      if (
+        !isPhoto &&
+        (typeof videoDuration !== 'number' ||
+          !Number.isFinite(videoDuration) ||
+          videoDuration <= 0)
+      ) {
+        throw new BadBody(
+          'tiktok-error-video-duration-unavailable',
+          JSON.stringify({ videoDuration }),
+          Buffer.from(JSON.stringify({ videoDuration })),
+          'TikTok requires a measured video duration before Direct Post. Re-upload the video after media processing completes.'
+        );
+      }
+
+      if (
+        !isPhoto &&
+        videoDuration > creatorInfo.maxVideoPostDurationSec
+      ) {
+        throw new BadBody(
+          'tiktok-error-video-duration',
+          JSON.stringify({
+            videoDuration,
+            maxVideoPostDurationSec: creatorInfo.maxVideoPostDurationSec,
+          }),
+          Buffer.from(
+            JSON.stringify({
+              videoDuration,
+              maxVideoPostDurationSec: creatorInfo.maxVideoPostDurationSec,
+            })
+          ),
+          `This video is longer than your TikTok account's ${creatorInfo.maxVideoPostDurationSec}-second limit.`
+        );
+      }
+    }
     const videoPath = firstPost?.media?.[0]?.path!;
+
+    let photoUrls: string[] | undefined;
+    let directVideoUrl: string | undefined;
+    try {
+      const requireTikTokPullUrl = (path: string) => {
+        const signedLocalUrl = signLocalTikTokMediaUrl(path, {
+          frontendUrl: process.env.FRONTEND_URL || '',
+        });
+        if (signedLocalUrl) return signedLocalUrl;
+        if (isTikTokVerifiedMediaUrl(path)) return path;
+        throw new Error(
+          'TikTok media must use local /uploads storage or an HTTPS prefix listed in TIKTOK_VERIFIED_MEDIA_URL_PREFIXES'
+        );
+      };
+
+      if (isPhoto) {
+        photoUrls = firstPost.media?.map((media) =>
+          requireTikTokPullUrl(media.path)
+        );
+      } else if (method === 'DIRECT_POST') {
+        directVideoUrl = requireTikTokPullUrl(videoPath);
+      }
+    } catch (err: any) {
+      throw new BadBody(
+        'tiktok-error-signed-media',
+        JSON.stringify({ message: err?.message }),
+        Buffer.from(JSON.stringify({ message: err?.message })),
+        'TikTok cannot securely read this media. Configure a verified HTTPS media prefix or use local media storage.'
+      );
+    }
+
+    /*
+     * TikTok fetches PULL_FROM_URL sources directly and rejects redirects.
+     * The configured R2 prefixes must therefore point to direct object URLs,
+     * not a redirecting proxy or URL shortener.
+     */
+    if (
+      isPhoto &&
+      (!photoUrls || photoUrls.length !== firstPost.media?.length)
+    ) {
+      throw new BadBody(
+        'tiktok-error-signed-media',
+        '{}',
+        Buffer.from('{}'),
+        'TikTok requires a direct media URL for every photo.'
+      );
+    }
 
     // For videos we only need the total size up front (HEAD / statSync) so we
     // can init the upload; the bytes themselves are streamed later, never fully
     // loaded into memory.
-    const videoSize = isPhoto
+    const videoSize = isPhoto || directVideoUrl
       ? undefined
       : await this.mediaSize(videoPath, 'tiktok-error-upload');
 
@@ -854,7 +1106,12 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           },
           body: JSON.stringify({
             ...this.buildTikokPostInfoBody(firstPost),
-            ...this.buildTikokSourceInfoBody(firstPost, videoSize),
+            ...this.buildTikokSourceInfoBody(
+              firstPost,
+              videoSize,
+              photoUrls,
+              directVideoUrl
+            ),
           }),
         }
       )
@@ -930,6 +1187,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
             releaseURL: check.releaseURL,
             postId: String(check.postId),
             status: 'success',
+            deliveryStatus: check.deliveryStatus || 'published',
           },
         ];
       }

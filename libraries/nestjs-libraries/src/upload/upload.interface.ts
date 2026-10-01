@@ -18,6 +18,9 @@ export interface IUploadProvider {
     mimetype: string,
     ext: string
   ): Promise<UploadedStream>;
+  // Reads only the media stream needed to extract metadata; implementations
+  // must not buffer the whole object in memory.
+  getVideoDuration?(filePath: string): Promise<number | null>;
   removeFile(filePath: string): Promise<void>;
   // Presigned URLs handed to the media processor, which has no storage
   // credentials; only cloud storage can mint them

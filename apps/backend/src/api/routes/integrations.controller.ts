@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -35,6 +37,7 @@ import {
 } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
 import { uniqBy } from 'lodash';
 import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
+import { TiktokProvider } from '@gitroom/nestjs-libraries/integrations/social/tiktok.provider';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -191,6 +194,30 @@ export class IntegrationsController {
       user.id,
       org.id
     );
+  }
+
+  @Get('/:id/tiktok/creator-info')
+  async getTikTokCreatorInfo(
+    @Param('id') id: string,
+    @GetOrgFromRequest() org: Organization
+  ) {
+    const integration = await this._integrationService.getIntegrationById(
+      org.id,
+      id
+    );
+    if (!integration) {
+      throw new NotFoundException('Invalid integration');
+    }
+    if (integration.providerIdentifier !== 'tiktok') {
+      throw new BadRequestException(
+        'Creator info is only available for TikTok'
+      );
+    }
+
+    const provider = this._integrationManager.getSocialIntegration(
+      'tiktok'
+    ) as TiktokProvider;
+    return provider.creatorInfo(integration.token);
   }
 
   @Get('/social/:integration')

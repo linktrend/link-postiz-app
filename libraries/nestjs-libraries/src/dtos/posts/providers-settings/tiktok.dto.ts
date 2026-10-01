@@ -146,6 +146,14 @@ export class TikTokDto {
   })
   brand_organic_toggle: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  @JSONSchema({
+    description:
+      'Enables commercial content disclosure on DIRECT_POST. When true, at least one of brand_organic_toggle or brand_content_toggle must also be true. Ignored by TikTok on UPLOAD.',
+  })
+  disclose?: boolean;
+
   @Type(() => TikTokMusic)
   @ValidateNested()
   @IsOptional()
@@ -175,4 +183,12 @@ export class TikTokDto {
       'Only use "UPLOAD" when the user explicitly asks to review or edit the post inside the TikTok app before publishing.',
   })
   content_posting_method: 'DIRECT_POST' | 'UPLOAD';
+
+  @IsOptional()
+  @IsBoolean()
+  @JSONSchema({
+    description:
+      'Must be true before content is sent to TikTok, whether as a Direct Post or an inbox upload.',
+  })
+  tiktokConsent?: boolean;
 }

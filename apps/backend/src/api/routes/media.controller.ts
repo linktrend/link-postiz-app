@@ -93,7 +93,7 @@ export class MediaController {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
-    return this._mediaService.saveFile(
+    return this._mediaService.saveUploadedFile(
       org.id,
       file.filename,
       file.path,

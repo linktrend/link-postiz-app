@@ -34,6 +34,11 @@ export interface IAuthenticator {
     postId: string,
     fromDate: number,
   ): Promise<AnalyticsData[]>;
+  resolveReleaseId?(
+    accessToken: string,
+    releaseId: string,
+    integration: Integration
+  ): Promise<{ postId: string; releaseURL: string } | undefined>; // Final id + URL to persist when the stored releaseId is still a publish id, undefined when nothing to resolve (yet)
   changeNickname?(
     id: string,
     accessToken: string,
@@ -201,6 +206,7 @@ export interface SocialProvider
   isChromeExtension?: boolean;
   extensionCookies?: { name: string; domain: string }[];
   editor: 'none' | 'normal' | 'markdown' | 'html';
+  inlineImages?: (settings?: any) => boolean;
   customFields?: () => Promise<
     {
       key: string;

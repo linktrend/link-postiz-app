@@ -32,3 +32,41 @@ export function buildLinkedinPersonalAuthorizationUrl(input: {
   );
   return authorizationUrl.toString();
 }
+
+/**
+ * Resolves optional LinkedIn refresh-token support without scheduling a
+ * refresh that the application cannot perform.
+ *
+ * @param input - New token response and any refresh token already held.
+ * @returns The refresh token to store and a supported access-token lifetime.
+ */
+export function resolveLinkedinTokenLifecycle(input: {
+  refreshToken?: string;
+  responseRefreshToken?: string;
+  expiresIn?: number;
+}): { refreshToken?: string; expiresIn?: number } {
+  const refreshToken = input.responseRefreshToken || input.refreshToken;
+  return {
+    refreshToken,
+    expiresIn: refreshToken ? input.expiresIn : undefined,
+  };
+}
+
+/**
+ * Maps the LinkedIn OpenID Connect userinfo response to Postiz identity fields.
+ *
+ * @param userInfo - Identity claims returned by LinkedIn's userinfo endpoint.
+ * @returns Postiz account fields using the stable OIDC subject as its profile.
+ */
+export function mapLinkedinPersonalUserInfo(userInfo: {
+  sub: string;
+  name: string;
+  picture?: string;
+}): { id: string; name: string; picture: string; username: string } {
+  return {
+    id: userInfo.sub,
+    name: userInfo.name,
+    picture: userInfo.picture || '',
+    username: userInfo.sub,
+  };
+}

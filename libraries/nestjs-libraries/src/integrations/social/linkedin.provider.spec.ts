@@ -27,9 +27,6 @@ jest.mock('@gitroom/nestjs-libraries/services/make.is', () => ({
 jest.mock('@gitroom/nestjs-libraries/services/make.secure.id', () => ({
   makeSecureId: jest.fn(),
 }));
-jest.mock('@gitroom/helpers/utils/read.or.fetch', () => ({
-  readOrFetch: jest.fn(),
-}));
 jest.mock('@gitroom/helpers/utils/has.extension', () => ({
   hasExtension: jest.fn(),
 }));

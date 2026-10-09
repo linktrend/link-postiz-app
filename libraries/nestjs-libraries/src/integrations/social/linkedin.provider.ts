@@ -27,6 +27,8 @@ import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorato
 import {
   buildLinkedinPersonalAuthorizationUrl,
   LINKEDIN_PERSONAL_SCOPES,
+  mapLinkedinPersonalUserInfo,
+  resolveLinkedinTokenLifecycle,
 } from './linkedin.oauth';
 
 // Travels through the workflow history between postPending, checkPostStatus
@@ -66,7 +68,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   oneTimeToken = true;
 
   isBetweenSteps = false;
-  scopes = [...LINKEDIN_PERSONAL_SCOPES];
+  scopes: string[] = [...LINKEDIN_PERSONAL_SCOPES];
   override maxConcurrentJob = 2;
   refreshWait = true;
   editor = 'normal' as const;
@@ -124,9 +126,15 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   }
 
   async refreshToken(refresh_token: string): Promise<AuthTokenDetails> {
+    if (!refresh_token) {
+      throw new Error(
+        'LinkedIn did not provide a refresh token; reconnect the account.'
+      );
+    }
+
     const {
       access_token: accessToken,
-      refresh_token: refreshToken,
+      refresh_token: responseRefreshToken,
       expires_in,
     } = await (
       await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
@@ -143,34 +151,29 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       })
     ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
-
-    const {
-      name,
-      sub: id,
-      picture,
-    } = await (
+    const userInfo = await (
       await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       })
     ).json();
+    const { id, name, picture, username } =
+      mapLinkedinPersonalUserInfo(userInfo);
+    const tokenLifecycle = resolveLinkedinTokenLifecycle({
+      refreshToken: refresh_token,
+      responseRefreshToken,
+      expiresIn: expires_in,
+    });
 
     return {
       id,
       accessToken,
-      refreshToken,
-      expiresIn: expires_in,
+      refreshToken: tokenLifecycle.refreshToken,
+      expiresIn: tokenLifecycle.expiresIn,
       name,
-      picture: picture || '',
-      username: vanityName,
+      picture,
+      username,
     };
   }
 
@@ -208,8 +211,8 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
 
     const {
       access_token: accessToken,
-      expires_in: expiresIn,
-      refresh_token: refreshToken,
+      expires_in: expiresInFromResponse,
+      refresh_token: refreshTokenFromResponse,
       scope,
     } = await (
       await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
@@ -223,34 +226,28 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
 
     this.checkScopes(this.scopes, scope);
 
-    const {
-      name,
-      sub: id,
-      picture,
-    } = await (
+    const userInfo = await (
       await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       })
     ).json();
-
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const { id, name, picture, username } =
+      mapLinkedinPersonalUserInfo(userInfo);
+    const tokenLifecycle = resolveLinkedinTokenLifecycle({
+      responseRefreshToken: refreshTokenFromResponse,
+      expiresIn: expiresInFromResponse,
+    });
 
     return {
       id,
       accessToken,
-      refreshToken,
-      expiresIn,
+      refreshToken: tokenLifecycle.refreshToken,
+      expiresIn: tokenLifecycle.expiresIn,
       name,
       picture,
-      username: vanityName,
+      username,
     };
   }
 

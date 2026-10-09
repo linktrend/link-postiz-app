@@ -23,12 +23,6 @@ import { LinkedinDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-sett
 import imageToPDF from 'image-to-pdf';
 import { Readable } from 'stream';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
-import {
-  buildLinkedinPersonalAuthorizationUrl,
-  LINKEDIN_PERSONAL_SCOPES,
-  mapLinkedinPersonalUserInfo,
-  resolveLinkedinTokenLifecycle,
-} from './linkedin.oauth';
 
 // Travels through the workflow history between postPending, checkPostStatus
 // and finalizePost - keep it small JSON (media urns and the post content, never
@@ -67,8 +61,16 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   oneTimeToken = true;
 
   isBetweenSteps = false;
-  scopes: string[] = [...LINKEDIN_PERSONAL_SCOPES];
-  override maxConcurrentJob = 2;
+  scopes = [
+    'openid',
+    'profile',
+    'w_member_social',
+    'r_basicprofile',
+    'rw_organization_admin',
+    'w_organization_social',
+    'r_organization_social',
+  ];
+  override maxConcurrentJob = 8; // LinkedIn limits are daily budgets
   refreshWait = true;
   editor = 'normal' as const;
   dto = LinkedinDto;
@@ -125,15 +127,9 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   }
 
   async refreshToken(refresh_token: string): Promise<AuthTokenDetails> {
-    if (!refresh_token) {
-      throw new Error(
-        'LinkedIn did not provide a refresh token; reconnect the account.'
-      );
-    }
-
     const {
       access_token: accessToken,
-      refresh_token: responseRefreshToken,
+      refresh_token: refreshToken,
       expires_in,
     } = await (
       await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
@@ -150,40 +146,45 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       })
     ).json();
 
-    const userInfo = await (
+    const { vanityName } = await (
+      await fetch('https://api.linkedin.com/v2/me', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+    ).json();
+
+    const {
+      name,
+      sub: id,
+      picture,
+    } = await (
       await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       })
     ).json();
-    const { id, name, picture, username } =
-      mapLinkedinPersonalUserInfo(userInfo);
-    const tokenLifecycle = resolveLinkedinTokenLifecycle({
-      refreshToken: refresh_token,
-      responseRefreshToken,
-      expiresIn: expires_in,
-    });
 
     return {
       id,
       accessToken,
-      refreshToken: tokenLifecycle.refreshToken,
-      expiresIn: tokenLifecycle.expiresIn,
+      refreshToken,
+      expiresIn: expires_in,
       name,
-      picture,
-      username,
+      picture: picture || '',
+      username: vanityName,
     };
   }
 
   async generateAuthUrl() {
     const state = makeSecureId(6);
     const codeVerifier = makeSecureId(30);
-    const url = buildLinkedinPersonalAuthorizationUrl({
-      clientId: process.env.LINKEDIN_CLIENT_ID!,
-      frontendUrl: process.env.FRONTEND_URL!,
-      state,
-    });
+    const url = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${
+      process.env.LINKEDIN_CLIENT_ID
+    }&prompt=none&redirect_uri=${encodeURIComponent(
+      `${process.env.FRONTEND_URL}/integrations/social/linkedin`
+    )}&state=${state}&scope=${encodeURIComponent(this.scopes.join(' '))}`;
     return {
       url,
       codeVerifier,
@@ -210,8 +211,8 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
 
     const {
       access_token: accessToken,
-      expires_in: expiresInFromResponse,
-      refresh_token: refreshTokenFromResponse,
+      expires_in: expiresIn,
+      refresh_token: refreshToken,
       scope,
     } = await (
       await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
@@ -225,28 +226,34 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
 
     this.checkScopes(this.scopes, scope);
 
-    const userInfo = await (
+    const {
+      name,
+      sub: id,
+      picture,
+    } = await (
       await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       })
     ).json();
-    const { id, name, picture, username } =
-      mapLinkedinPersonalUserInfo(userInfo);
-    const tokenLifecycle = resolveLinkedinTokenLifecycle({
-      responseRefreshToken: refreshTokenFromResponse,
-      expiresIn: expiresInFromResponse,
-    });
+
+    const { vanityName } = await (
+      await fetch('https://api.linkedin.com/v2/me', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+    ).json();
 
     return {
       id,
       accessToken,
-      refreshToken: tokenLifecycle.refreshToken,
-      expiresIn: tokenLifecycle.expiresIn,
+      refreshToken,
+      expiresIn,
       name,
       picture,
-      username,
+      username: vanityName,
     };
   }
 

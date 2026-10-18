@@ -537,6 +537,13 @@
   "billing_ai_images_per_month": "Images IA par mois",
   "billing_ai_videos_per_month": "Vidéos IA par mois",
   "billing_clipping_minutes_per_month": "minutes de découpage vidéo IA par mois",
+  "billing_cycle": "Cycle de facturation",
+  "billing_renews_on": "Votre forfait sera renouvelé le",
+  "billing_trial_ends_on": "Votre période d'essai gratuit se termine et votre premier paiement sera prélevé le",
+  "billing_ai_credits_reset_monthly": "Les crédits IA sont réinitialisés chaque mois.",
+  "billing_ai_images": "Images IA",
+  "billing_ai_videos": "Vidéos IA",
+  "billing_clipping_minutes": "Minutes de découpage",
   "billing_billing_address": "Adresse de facturation",
   "billing_payment": "Paiement",
   "billing_powered_by_stripe": "Paiements sécurisés traités par",
@@ -870,5 +877,10 @@
   "post_now_all_channels": "Publier maintenant sur tous les canaux",
   "schedule_post_in_all_channels_question": "Ce post a été créé pour plusieurs canaux. Voulez-vous tous les planifier ?",
   "schedule_all_channels": "Planifier tous les canaux",
-  "only_channel": "Uniquement"
+  "only_channel": "Uniquement",
+  "hubspot_installed": "Postiz est installé dans HubSpot",
+  "hubspot_installed_description": "Connectez ici, dans Postiz, les canaux sur lesquels vous souhaitez publier. Ensuite, dans HubSpot, ouvrez Agent Hub > Agent Builder, ajoutez un outil, choisissez Postiz MCP sous MCP Servers et cliquez sur Connect and add.",
+  "timezone": "Fuseau horaire",
+  "automatic_timezone": "Automatique ({{timezone}})",
+  "could_not_save_timezone": "Impossible d'enregistrer le fuseau horaire"
 }

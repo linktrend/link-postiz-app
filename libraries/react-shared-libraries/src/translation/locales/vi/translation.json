@@ -537,6 +537,13 @@
   "billing_ai_images_per_month": "Hình ảnh AI mỗi tháng",
   "billing_ai_videos_per_month": "Video AI mỗi tháng",
   "billing_clipping_minutes_per_month": "phút cắt video bằng AI mỗi tháng",
+  "billing_cycle": "Chu kỳ thanh toán",
+  "billing_renews_on": "Gói của bạn sẽ được gia hạn vào",
+  "billing_trial_ends_on": "Thời gian dùng thử miễn phí của bạn sẽ kết thúc và khoản thanh toán đầu tiên sẽ được tính vào",
+  "billing_ai_credits_reset_monthly": "Tín dụng AI sẽ được đặt lại hàng tháng.",
+  "billing_ai_images": "Hình ảnh AI",
+  "billing_ai_videos": "Video AI",
+  "billing_clipping_minutes": "Số phút cắt ghép",
   "billing_billing_address": "Địa chỉ thanh toán",
   "billing_payment": "Thanh toán",
   "billing_powered_by_stripe": "Thanh toán an toàn được xử lý bởi",
@@ -870,5 +877,10 @@
   "post_now_all_channels": "Đăng ngay trên tất cả các kênh",
   "schedule_post_in_all_channels_question": "Bài đăng này được tạo cho nhiều kênh. Bạn có muốn lên lịch cho tất cả các kênh không?",
   "schedule_all_channels": "Lên lịch cho tất cả các kênh",
-  "only_channel": "Chỉ"
+  "only_channel": "Chỉ",
+  "hubspot_installed": "Postiz đã được cài đặt trong HubSpot",
+  "hubspot_installed_description": "Hãy kết nối tại đây, trong Postiz, các kênh bạn muốn đăng bài. Sau đó, trong HubSpot, mở Agent Hub > Agent Builder, thêm một công cụ, chọn Postiz MCP trong MCP Servers và nhấp vào Connect and add.",
+  "timezone": "Múi giờ",
+  "automatic_timezone": "Tự động ({{timezone}})",
+  "could_not_save_timezone": "Không thể lưu múi giờ"
 }

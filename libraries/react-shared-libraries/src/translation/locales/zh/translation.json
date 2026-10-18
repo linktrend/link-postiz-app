@@ -537,6 +537,13 @@
   "billing_ai_images_per_month": "每月AI图片生成数",
   "billing_ai_videos_per_month": "每月AI视频数",
   "billing_clipping_minutes_per_month": "分钟AI视频剪辑（每月）",
+  "billing_cycle": "账单周期",
+  "billing_renews_on": "您的套餐将在以下日期续订",
+  "billing_trial_ends_on": "您的免费试用将在以下日期结束，并将开始收取您的首次费用：",
+  "billing_ai_credits_reset_monthly": "AI额度每月重置。",
+  "billing_ai_images": "AI图片",
+  "billing_ai_videos": "AI视频",
+  "billing_clipping_minutes": "剪辑分钟数",
   "billing_billing_address": "账单地址",
   "billing_payment": "付款",
   "billing_powered_by_stripe": "安全支付由 Stripe 处理",
@@ -870,5 +877,10 @@
   "post_now_all_channels": "立即在所有频道发布",
   "schedule_post_in_all_channels_question": "此帖子是为多个频道创建的。要在所有频道安排发布吗？",
   "schedule_all_channels": "在所有频道安排发布",
-  "only_channel": "仅"
+  "only_channel": "仅",
+  "hubspot_installed": "Postiz 已安装到 HubSpot",
+  "hubspot_installed_description": "请先在 Postiz 中连接您要发布内容的渠道。然后在 HubSpot 中打开 Agent Hub > Agent Builder，添加一个工具，在 MCP Servers 下选择 Postiz MCP，然后点击 Connect and add。",
+  "timezone": "时区",
+  "automatic_timezone": "自动 ({{timezone}})",
+  "could_not_save_timezone": "无法保存时区"
 }

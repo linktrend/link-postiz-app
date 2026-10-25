@@ -25,6 +25,7 @@ import { createReadStream, statSync } from 'fs';
 import { getSsrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { setHeartbeatDetails } from '@gitroom/nestjs-libraries/temporal/temporal.heartbeat';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { DashboardFunction } from '@gitroom/nestjs-libraries/integrations/dashboard.function.decorator';
 
 const clientAndYoutube = () => {
   const client = new google.auth.OAuth2({
@@ -202,6 +203,14 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
       };
     }
 
+    if (body.includes('defaultVideoInsertPerDayPerProject')) {
+      return {
+        type: 'bad-body',
+        value:
+          "YouTube's daily upload quota is exhausted for today, please reschedule this post for a later time.",
+      };
+    }
+
     if (body.includes('rateLimitExceeded')) {
       return {
         type: 'bad-body',
@@ -342,6 +351,7 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
     };
   }
 
+  @DashboardFunction()
   async pages(accessToken: string) {
     const { client, youtube } = clientAndYoutube();
     client.setCredentials({ access_token: accessToken });
@@ -473,7 +483,7 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
       return Number(length);
     }
 
-    return statSync(path).size;
+    return statSync(this.localMediaPath(path, this.identifier)).size;
   }
 
   // Returns a streaming body for the [start, end] byte range of the media so we
@@ -509,7 +519,10 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
       return response.body;
     }
 
-    return createReadStream(path, { start, end });
+    return createReadStream(this.localMediaPath(path, this.identifier), {
+      start,
+      end,
+    });
   }
 
   // Asks the upload session for the truth: the created video when the upload
@@ -633,7 +646,10 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
           videoSize,
           path,
           uploadedBytes: 0,
-          thumbnail: settings?.thumbnail?.path || '',
+          // the YouTube setting wins, so posts that set both keep publishing
+          // with the one they always had
+          thumbnail:
+            settings?.thumbnail?.path || firstPost?.media?.[0]?.thumbnail || '',
           postDbId: firstPost.id,
         },
       },

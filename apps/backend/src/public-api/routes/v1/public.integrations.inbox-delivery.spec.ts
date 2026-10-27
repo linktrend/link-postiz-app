@@ -164,7 +164,10 @@ test('inbox delivery read: P12 FAILSAFE/SECRETS', async () => {
   f.raw.connection.withAbortSignal.mockImplementation(async (signal, fn) => { signal.addEventListener('abort', () => undefined, { once: true }); return fn(); });
   f.history.mockImplementation(async () => { req.emit('aborted'); throw new Error(canary); });
   const started = Date.now();
-  await expect(c.getInboxDelivery({ id: 'orgA' }, 'postA', {}, req, res)).rejects.toMatchObject({ status: 503, message: 'Inbox delivery is unavailable' });
+  const error = await c.getInboxDelivery({ id: 'orgA' }, 'postA', {}, req, res).catch((error: unknown) => error);
+  expect(error.getStatus()).toBe(503);
+  expect(error.getResponse()).toEqual({ msg: 'Inbox delivery is unavailable' });
+  noSecrets(error.getResponse());
   expect(Date.now() - started).toBeLessThan(4000); expect(f.raw.connection.withAbortSignal.mock.calls[0][0].aborted).toBe(true);
   expect(req.listenerCount('aborted')).toBe(0); expect(res.listenerCount('close')).toBe(0); expect(f.writes).not.toHaveBeenCalled();
   let secretReads = 0;

@@ -25,7 +25,7 @@ dayjs.extend(utc);
 @Injectable()
 export class PostsRepository {
   constructor(
-    private _post: PrismaRepository<'post'>,
+    private _post: PrismaRepository<'post' | 'media'>,
     private _popularPosts: PrismaRepository<'popularPosts'>,
     private _comments: PrismaRepository<'comments'>,
     private _tags: PrismaRepository<'tags'>,
@@ -703,6 +703,27 @@ export class PostsRepository {
       data: {
         lastMessageId: messageId,
       },
+    });
+  }
+
+  /** Select only the authenticated organization's inbox attribution fields. */
+  getInboxDeliveryPost(id: string, organizationId: string) {
+    return this._post.model.post.findFirst({
+      where: { id, organizationId, deletedAt: null, parentPostId: null },
+      select: {
+        id: true, organizationId: true, integrationId: true, state: true,
+        publishDate: true, updatedAt: true, intervalInDays: true, settings: true, image: true,
+        integration: { select: { id: true, organizationId: true, internalId: true,
+          providerIdentifier: true, disabled: true, deletedAt: true, inBetweenSteps: true } },
+      },
+    });
+  }
+
+  /** Resolve a single ready MP4's owned media relation without reading credentials. */
+  getInboxDeliveryMedia(id: string, organizationId: string) {
+    return this._post.model.media.findFirst({
+      where: { id, organizationId, deletedAt: null, status: 'ready' },
+      select: { id: true, path: true, updatedAt: true },
     });
   }
 

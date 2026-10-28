@@ -6,12 +6,69 @@ on:
   pull_request:
     branches: [main, staging, development]
 
+permissions:
+  contents: read
+
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Repository policy checkpoint
+      - name: Fixed Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - name: Fixed package manager
         run: |
-          echo "CI placeholder: add repository-specific build/test commands."
+          corepack enable
+          corepack prepare pnpm@10.6.1 --activate
+      - name: Fixed inbox delivery verification
+        env:
+          DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:1/fixture
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess, sys, time
+          commands = [
+            ['timeout', '--signal=TERM', '--kill-after=10s', '600s', 'pnpm', 'install', '--frozen-lockfile', '--ignore-scripts'],
+            ['timeout', '--signal=TERM', '--kill-after=10s', '120s', 'pnpm', 'exec', 'prisma', 'generate', '--schema', './libraries/nestjs-libraries/src/database/prisma/schema.prisma'],
+            ['timeout', '--signal=TERM', '--kill-after=10s', '180s', 'pnpm', 'exec', 'jest', '--config', './jest.inbox-delivery.config.cjs', '--runInBand', '--cache=false', '--coverage=false', '--testTimeout=5000', '--runTestsByPath', 'apps/backend/src/public-api/routes/v1/public.integrations.inbox-delivery.spec.ts', 'libraries/nestjs-libraries/src/database/prisma/posts/posts.inbox-delivery.spec.ts'],
+          ]
+          root = pathlib.Path('inbox-verification-evidence')
+          root.mkdir()
+          remaining = 1048576
+          results = []
+          failed = 0
+          with (root / 'verification.log').open('wb') as log:
+            for command in commands:
+              start = time.monotonic()
+              process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+              truncated = False
+              while True:
+                chunk = process.stdout.read(65536)
+                if not chunk:
+                  break
+                allowed = chunk[:remaining]
+                remaining -= len(allowed)
+                log.write(allowed)
+                sys.stdout.buffer.write(allowed)
+                sys.stdout.buffer.flush()
+                if len(allowed) != len(chunk):
+                  truncated = True
+              code = process.wait()
+              results.append({'command': command, 'exitCode': code, 'seconds': round(time.monotonic()-start, 3), 'logLimitExceeded': truncated})
+              if code or truncated:
+                failed = code if 0 < code < 256 else 1
+                break
+          (root / 'result.json').write_text(json.dumps({'commands': results, 'passed': not failed}, indent=2))
+          sys.exit(failed)
+          PY
+      - name: Preserve bounded verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inbox-delivery-verification
+          path: inbox-verification-evidence/
+          retention-days: 7
+          if-no-files-found: error

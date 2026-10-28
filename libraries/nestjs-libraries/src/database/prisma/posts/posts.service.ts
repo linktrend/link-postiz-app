@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  ServiceUnavailableException,
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
 import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
+import { decodeInboxHistory, inboxPostMaterial, type PostInboxDelivery } from './posts.inbox-delivery';
 import { CreatePostDto } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
 import dayjs from 'dayjs';
 import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
@@ -140,6 +142,51 @@ export class PostsService {
     }
 
     return [];
+  }
+
+  /** Read native inbox evidence for one currently owned TikTok post; never polls a provider. */
+  async getInboxDelivery(orgId: string, postId: string, signal: AbortSignal): Promise<PostInboxDelivery> {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(orgId) ||
+        !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(postId)) throw new BadRequestException('Invalid inbox selection');
+    try {
+      if (signal.aborted) throw new ServiceUnavailableException('Inbox delivery is unavailable');
+      const post = await this._postRepository.getInboxDeliveryPost(postId, orgId);
+      if (!post) throw new NotFoundException('Post not found');
+      const material = inboxPostMaterial(post, Date.now());
+      if (!material) throw new BadRequestException('Post is not an eligible TikTok inbox upload');
+      const media = await this._postRepository.getInboxDeliveryMedia(material.mediaId, orgId);
+      if (!media || media.path !== material.path) throw new BadRequestException('Inbox media is unavailable');
+      const snapshot = JSON.stringify({ post, media });
+      const raw = this._temporalService.client.getRawClient();
+      let history: unknown;
+      if (raw && !signal.aborted) {
+        try {
+          history = await raw.connection.withAbortSignal(signal, () => raw.withDeadline(Date.now() + 3500, async () => {
+            const workflowId = `post_${post.id}`;
+            const handle = raw.workflow.getHandle(workflowId);
+            const before = await handle.describe();
+            const result = await raw.workflowService.getWorkflowExecutionHistory({
+              namespace: raw.options.namespace, execution: { workflowId, runId: before.runId },
+              maximumPageSize: 501, waitNewEvent: false, skipArchival: true,
+            });
+            const after = await handle.describe();
+            // Pin the exact run and never follow an unbounded page/continue-as-new chain.
+            if (before.runId !== after.runId || result.nextPageToken?.length || result.rawHistory?.length) return undefined;
+            return result.history;
+          }));
+        } catch { /* No raw history/provider error escapes this projection. */ }
+      }
+      if (signal.aborted) throw new ServiceUnavailableException('Inbox delivery is unavailable');
+      const current = await this._postRepository.getInboxDeliveryPost(postId, orgId);
+      const currentMedia = await this._postRepository.getInboxDeliveryMedia(material.mediaId, orgId);
+      if (!current || !currentMedia || signal.aborted || JSON.stringify({ post: current, media: currentMedia }) !== snapshot) {
+        throw new ServiceUnavailableException('Inbox delivery is unavailable');
+      }
+      return decodeInboxHistory(post, material.mediaId, history, Date.now());
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) throw error;
+      throw new ServiceUnavailableException('Inbox delivery is unavailable');
+    }
   }
 
   async getPostById(postId: string, orgId: string) {

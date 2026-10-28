@@ -9,6 +9,8 @@ import {
   Post,
   Put,
   Query,
+  Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -18,6 +20,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
 import { GetIncludeDeletedFromRequest } from '@gitroom/nestjs-libraries/user/include.deleted.from.request';
 import { Organization } from '@prisma/client';
+import type { Request, Response } from 'express';
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
@@ -122,6 +125,39 @@ export class PublicIntegrationsController {
       posts,
       // comments,
     };
+  }
+
+  /** Bounded read under the existing PublicAuthMiddleware organization scope. */
+  @Get('/posts/:id/inbox-delivery')
+  async getInboxDelivery(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Query() query: Record<string, unknown>,
+    @Req() request: Request & { authOrgId?: string; includeDeleted?: boolean },
+    @Res({ passthrough: true }) response: Response
+  ) {
+    response.setHeader('Cache-Control', 'private, no-store');
+    if (!org?.id || request.authOrgId !== org.id || request.includeDeleted ||
+        request.headers['x-postiz-org'] !== undefined || request.headers['x-postiz-include-deleted'] !== undefined) {
+      throw new HttpException({ msg: 'Unauthorized' }, 403);
+    }
+    if (request.aborted || response.destroyed) throw new HttpException({ msg: 'Inbox delivery is unavailable' }, 503);
+    if (Object.keys(query).length) throw new BadRequestException('Inbox delivery does not accept query selectors');
+    const controller = new AbortController();
+    let reject!: () => void;
+    const expired = new Promise<never>((_resolve, fail) => {
+      reject = () => fail(new HttpException({ msg: 'Inbox delivery is unavailable' }, 503));
+    });
+    void expired.catch(() => undefined);
+    const abort = () => { controller.abort(); reject(); };
+    const timer = setTimeout(abort, 4000);
+    request.once('aborted', abort); response.once('close', abort);
+    try {
+      return await Promise.race([this._postsService.getInboxDelivery(org.id, id, controller.signal), expired]);
+    } finally {
+      clearTimeout(timer); controller.abort();
+      request.off('aborted', abort); response.off('close', abort);
+    }
   }
 
   @Post('/posts')

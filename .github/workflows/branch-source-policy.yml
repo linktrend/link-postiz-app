@@ -8,17 +8,20 @@ jobs:
   branch-source-policy:
     runs-on: ubuntu-latest
     steps:
-      - name: Enforce promotion branch flow
+      - name: Enforce exact coordinated-release source
         env:
           BASE_BRANCH: ${{ github.base_ref }}
           HEAD_BRANCH: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           echo "PR source: ${HEAD_BRANCH}"
           echo "PR target: ${BASE_BRANCH}"
+          test "$HEAD_REPOSITORY" = "$BASE_REPOSITORY" || { echo "A same-repository source is required."; exit 1; }
           case "${BASE_BRANCH}" in
             main)
-              if [ "${HEAD_BRANCH}" != "staging" ]; then echo "Only staging may be merged into main."; exit 1; fi
+              if [ "${HEAD_BRANCH}" != "dev/minicodex-inbox-observation-20261027" ]; then echo "Main accepts only the approved coordinated-release worker branch."; exit 1; fi
               ;;
             staging)
               if [ "${HEAD_BRANCH}" != "development" ]; then echo "Only development may be merged into staging."; exit 1; fi

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, staging, development, dev/minicodex-inbox-observation-20261027]
+    branches: [main, staging, development]
   pull_request:
     branches: [main, staging, development]
 
